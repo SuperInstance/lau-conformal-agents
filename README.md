@@ -1,35 +1,35 @@
 # lau-conformal-agents
 
-**Conformal geometry for agent systems — transformations that preserve angles but not distances.** Möbius transformations, Weyl tensor, Virasoro algebra, conformal field theory, Liouville's theorem, and conformal prediction for uncertainty quantification.
+**Conformal geometry for agent systems — transformations that preserve angles but not necessarily distances.**
 
-165 tests · MIT license · `nalgebra` + `num-complex` + `serde`
+Conformal maps preserve local shape (angles) while allowing global deformation (scaling). For agents, conformal maps of belief space change the scale of uncertainty but preserve the structure of beliefs. This crate implements the full machinery: Möbius transformations, the Weyl tensor, conformal Laplacian, Virasoro algebra, CFT correlators, and conformal prediction for uncertainty quantification.
+
+165 tests · MIT license · pure Rust · zero unsafe
 
 ---
 
 ## What This Does
 
-This crate implements conformal geometry — the mathematics of angle-preserving transformations — and applies it to agent systems. Conformal maps stretch and squeeze space but never distort angles, making them a natural language for:
-
-1. **Möbius transformations** — the conformal automorphisms of the Riemann sphere: f(z) = (az+b)/(cz+d)
-2. **Conformal maps** — 2D angle-preserving maps via Cauchy-Riemann equations, Jacobian analysis
-3. **Liouville's theorem** — in dimensions n ≥ 3, only Möbius transformations are conformal
-4. **Conformal Laplacian** — the Yamabe operator L = −Δ + ((n−2)/(4(n−1)))R that transforms conformally
-5. **Weyl tensor** — the conformally invariant curvature tensor (vanishes iff conformally flat)
-6. **Conformal weights** — how geometric quantities transform under g̃ = Ω²g
-7. **Conformal compactification** — stereographic projection, adding ∞ to make Rⁿ → Sⁿ
-8. **Conformal Field Theory** — primary fields, stress-energy tensor, OPE, Kac determinant
-9. **Virasoro algebra** — central extension of the Witt algebra, [Lₘ, Lₙ] = (m−n)Lₘ₊ₙ + (c/12)(m³−m)δₘ₊ₙ,₀
-10. **Agent learning** — conformal prediction intervals, nonconformity scores, belief rescaling
+| Module | Concept | What you get |
+|---|---|---|
+| `mobius` | f(z) = (az+b)/(cz+d) on the Riemann sphere | Composition, fixed points, classification, cross-ratio |
+| `conformal_map` | Angle-preserving maps | Jacobian analysis, Schwarzian derivative, generalized circles |
+| `conformal_weight` | How fields transform under rescaling | Invariant, fixed-weight, dimension-dependent weights |
+| `weyl` | Conformal curvature tensor | Weyl tensor from Riemann/Ricci/scalar, Cotton tensor, conformal flatness |
+| `liouville` | Liouville's theorem | Conformal classification by dimension, conformal Killing equation |
+| `conformal_laplacian` | Yamabe operator L = −Δ + c(n)R | Scalar curvature coupling, Yamabe constant, conformal transformation law |
+| `compactification` | Adding a point at infinity | Stereographic projection, one-point compactification, round metric |
+| `cft` | Conformal field theory | Primary fields, OPE, stress-energy tensor, bootstrap bounds |
+| `virasoro` | Central extension of the Witt algebra | Commutators, Verma modules, Kac determinant, unitarity |
+| `agent_learning` | Learning with conformal geometry | Conformal prediction intervals, belief rescaling, invariant features |
 
 ---
 
 ## Key Idea
 
-A map f is **conformal** if it preserves angles: any two curves meeting at angle θ have images that also meet at angle θ. Equivalently, f pulls back the metric as a rescaling:
+> In 2D, the conformal group is infinite-dimensional (any holomorphic function). In higher dimensions, Liouville's theorem restricts it to Möbius transformations. This crate bridges the gap: it implements the full 2D conformal algebra (Virasoro) *and* the Riemannian conformal geometry (Weyl tensor, conformal Laplacian) needed for higher dimensions, all applied to agent belief spaces.
 
-**f\*g = e²ᵖ g** (or Ω²g)
-
-The geometry is preserved up to scale. This is weaker than isometry (which preserves distances) but much stronger than a general smooth map.
+The most practical piece is **conformal prediction**: given calibration data, produce prediction sets with guaranteed coverage probability — no distributional assumptions needed.
 
 ---
 
@@ -37,247 +37,268 @@ The geometry is preserved up to scale. This is weaker than isometry (which prese
 
 ```toml
 [dependencies]
-lau-conformal-agents = "0.1.0"
+lau-conformal-agents = { git = "https://github.com/SuperInstance/lau-conformal-agents" }
 ```
 
-Dependencies: `nalgebra = "0.33"`, `num-complex = "0.4"` (with serde), `serde = "1"`, `serde_json = "1"`, `approx = "0.5"`.
+Requires Rust 2021 edition. Dependencies: `nalgebra`, `num-complex`, `serde`, `approx`.
 
 ---
 
 ## Quick Start
 
+### Möbius transformations
+
 ```rust
-use lau_conformal_agents::*;
+use lau_conformal_agents::{MobiusTransformation, cross_ratio};
 use num_complex::Complex64;
 
-fn main() {
-    // Möbius transformation: f(z) = (z + 1) / (z - 1)
-    let mobius = MobiusTransformation::new(
-        Complex64::new(1.0, 0.0),  // a
-        Complex64::new(1.0, 0.0),  // b
-        Complex64::new(1.0, 0.0),  // c
-        Complex64::new(-1.0, 0.0), // d
-    );
+let c = Complex64::new;
 
-    let z = Complex64::new(2.0, 0.0);
-    let w = mobius.evaluate(z).unwrap();
-    println!("f({}) = {}", z, w);
+// f(z) = (z + 1) / (z - 1)
+let mob = MobiusTransformation::new(c(1.0, 0.0), c(1.0, 0.0), c(1.0, 0.0), c(-1.0, 0.0));
 
-    // Fixed points: solve f(z) = z
-    let fixed = mobius.fixed_points();
-    println!("Fixed points: {:?}", fixed);
+let z = c(2.0, 0.0);
+let w = mob.evaluate(z);
+assert_eq!(w.unwrap(), c(3.0, 0.0));
 
-    // Virasoro algebra with central charge c = 1
-    let vir = VirasoroAlgebra::new(1.0);
-    let (lie_coeff, central) = vir.commutator(3, -3);
-    println!("[L_3, L_-3] = {}·L_0 + {}", lie_coeff, central);
+// Classification: parabolic, elliptic, hyperbolic, loxodromic
+println!("type: {:?}", mob.classify());
 
-    // Conformal prediction interval
-    let cal_scores = vec![0.1, 0.3, 0.2, 0.5, 0.15, 0.4];
-    let (lo, hi) = conformal_prediction_interval(&cal_scores, 0.1, 42.0);
-    println!("90% prediction interval: [{:.2}, {:.2}]", lo, hi);
-}
+// Cross-ratio (conformal invariant)
+let cr = cross_ratio(c(1.0, 0.0), c(2.0, 0.0), c(3.0, 0.0), c(4.0, 0.0));
+```
+
+### Conformal prediction (uncertainty quantification)
+
+```rust
+use lau_conformal_agents::{conformal_prediction_interval, nonconformity};
+
+let calibration = vec![0.5, 1.2, 0.8, 1.5, 0.3, 2.1, 0.9];
+let prediction = 5.0;
+let alpha = 0.1; // 90% coverage
+
+let (lower, upper) = conformal_prediction_interval(&calibration, alpha, prediction);
+println!("90% prediction interval: [{:.2}, {:.2}]", lower, upper);
+```
+
+### CFT correlators
+
+```rust
+use lau_conformal_agents::{PrimaryField, StressEnergyTensor};
+
+let phi = PrimaryField::new("φ", 1.0, 0.0);  // Δ=1, spin=0
+let two_pt = phi.two_point_function(2.0);      // 1/|x-y|^{2Δ}
+println!("⟨φ(x)φ(y)⟩ = {:.4}", two_pt);
+
+let T = StressEnergyTensor::new(2, 1.0);       // d=2, c=1
+let ward_weight = T.ward_identity_weight(&phi); // Conformal Ward identity
+```
+
+### Virasoro algebra
+
+```rust
+use lau_conformal_agents::{VirasoroAlgebra, VermaModule};
+
+let vir = VirasoroAlgebra::new(1.0); // c = 1
+let (lie_coeff, central) = vir.commutator(3, -3);
+println!("[L₃, L₋₃] = {} L₀ + {}", lie_coeff, central);
+
+let verma = VermaModule::new(1.0, 0.5); // c=1, h=1/2
+println!("reducible? {}", verma.is_reducible(5));
+
+let kac = vir.kac_determinant(2, 0.5);
+println!("Kac det at level 2: {:.4}", kac);
 ```
 
 ---
 
 ## API Reference
 
-### Möbius Transformations (`mobius`)
+### Möbius Transformations
 
-| Type | Description |
-|------|-------------|
-| `MobiusTransformation` | f(z) = (az+b)/(cz+d), the conformal automorphisms of the Riemann sphere |
+**`MobiusTransformation`** — f(z) = (az + b)/(cz + d), ad − bc ≠ 0.
+- `MobiusTransformation::new(a, b, c, d)` — panics if degenerate.
+- `MobiusTransformation::try_new(a, b, c, d)` → `Option<Self>`.
+- `MobiusTransformation::identity()` — f(z) = z.
+- `mob.evaluate(z)` → `Option<Complex64>` — None if z maps to ∞.
+- `mob.compose(&other)` — composition of two maps.
+- `mob.inverse()` — inverse transformation.
+- `mob.fixed_points()` → `Vec<Complex64>` — solve f(z) = z.
+- `mob.trace()` — tr of the coefficient matrix (a + d).
+- `mob.classify()` → `MobiusType` — Parabolic / Elliptic / Hyperbolic / Loxodromic.
+- `mob.multiplier()` — derivative at the attracting fixed point.
+- `mob.normalize()` — rescale so det = 1.
 
-**Methods:**
-- `new(a, b, c, d)` — panics if degenerate (ad−bc ≈ 0)
-- `try_new(a, b, c, d)` → `Option<Self>`
-- `identity()` — f(z) = z
-- `translation(b)` — f(z) = z + b
-- `dilation(a)` — f(z) = az
-- `inversion()` — f(z) = 1/z
-- `evaluate(z)` → `Option<Complex64>` — None if maps to ∞
-- `compose(&other)` — f∘g
-- `inverse()` — f⁻¹
-- `determinant()` → Complex64 — ad − bc
-- `fixed_points()` → `Vec<Complex64>` — solutions to f(z) = z
-- `is_elliptic()`, `is_parabolic()`, `is_hyperbolic()`, `is_loxodromic()` — classification
-- `trace_squared()` → f64
-- `normalize()` — scale so ad − bc = 1
-- `to_matrix()` → `DMatrix<Complex64>` — 2×2 matrix [[a,b],[c,d]]
-- `cross_ratio(z1, z2, z3, z4)` → Complex64 — conformal invariant
-- `circle_to_circle(center, radius, samples)` → `(Vec<Complex64>, f64)` — maps circles to circles
+**Constructors**:
+- `translation(b)` — f(z) = z + b.
+- `dilation(lambda)` — f(z) = λz.
+- `rotation(theta)` — f(z) = e^{iθ} z.
+- `inversion()` — f(z) = 1/z.
 
-### Conformal Maps (`conformal_map`)
+**Utilities**:
+- `cross_ratio(z1, z2, z3, z4)` — the conformal invariant (z₁z₃)(z₂z₄)/((z₁z₂)(z₃z₄)).
+- `map_three_points_to_0_1_inf(z1, z2, z3)` — unique Möbius map.
+- `map_three_points(src, dst)` — map any triple to any triple.
 
-| Type | Description |
-|------|-------------|
-| `ConformalMap` | 2D conformal map via complex derivative at a point |
+### Conformal Maps
 
-**Methods:**
-- `from_complex_derivative(z, f')` — construct from complex derivative
-- `conformal_factor()` → f64 — |f'(z)|
-- `jacobian()` → &DMatrix<f64> — 2×2 real Jacobian
-- `is_conformal()` → bool — checks Cauchy-Riemann structure
-- `pullback_metric_scale()` → f64 — |f'(z)|²
+**`ConformalMap`** — angle-preserving map with Jacobian analysis.
+- `ConformalMap::from_complex_derivative(z, f_prime)` — build from f'(z).
+- `map.conformal_factor()` — |f'(z)|, the local scale factor.
+- `map.is_conformal()` — check Cauchy–Riemann conditions.
+- `map.pullback_metric_scale()` — e^{2σ} for the metric rescaling.
 
-| Function | Description |
-|----------|-------------|
-| `exponential_map(z)` | w = eᶻ (conformal) |
-| `logarithm_map(w)` | z = ln(w) (principal branch) |
-| `power_map(z, α)` | w = zᵅ (conformal except at branch points) |
-| `is_conformal_at(f, z, tol)` | Check if complex function f is conformal at z |
+**Elementary conformal maps**:
+- `exponential_map(z)` → e^z.
+- `logarithm_map(w)` → log w.
+- `power_map(z, alpha)` → z^α.
+- `conformal_inversion(z)` → 1/z.
+- `compose(f, g, z)` — functional composition at a point.
 
-### Liouville's Theorem (`liouville`)
+**`schwarzian_derivative(f, f_prime, f_double_prime, z)`** — the S[f](z) = f'''/f' − (3/2)(f''/f')² invariant that detects non-Möbius conformal maps.
 
-| Type | Description |
-|------|-------------|
-| `Dimension` | Enum: `Two`, `Three`, `Four`, `General(n)` |
-| `ConformalClassification` | Result: dimension, is_conformal, description |
+**`GeneralizedCircle`** — circles and lines in the complex plane (preserved by Möbius maps).
+- `GeneralizedCircle::circle(center, radius)`.
+- `GeneralizedCircle::line(a, b, c)` — ax + by + c = 0.
+- `circle.contains(z, tol)` / `circle.is_line()` / `circle.is_circle()`.
+- `circle_through_three_points(z1, z2, z3)`.
 
-| Function | Description |
-|----------|-------------|
-| `is_conformal_matrix_2d(M)` | Check 2×2 matrix for Cauchy-Riemann structure |
-| `is_conformal_matrix_3d(M)` | Check 3×3: MᵀM = λI (scaled rotation) |
-| `classify_conformal_maps(dim)` | Liouville's theorem: what maps exist in each dimension |
+### Conformal Weight
 
-### Conformal Laplacian (`conformal_laplacian`)
+**`ConformalWeight`** — how a field transforms under g̃ = Ω²g.
+- `Invariant` — weight 0 (doesn't change).
+- `Fixed(w)` — transforms as Ω^w.
+- `DimensionDependent(f)` — weight depends on manifold dimension.
+- `weight.transform(value, omega, dim)` — apply the transformation.
 
-| Type | Description |
-|------|-------------|
-| `ConformalLaplacian` | L = −Δ + ((n−2)/(4(n−1)))R (Yamabe operator) |
+**`ConformalWeights`** — common weights: metric (2), inverse metric (−2), volume form (n), scalar curvature (−2).
 
-**Methods:**
-- `new(dimension, scalar_curvature)`
-- `curvature_coefficient()` → f64 — (n−2)/(4(n−1))
-- `apply(Δf, f)` → f64 — Lf = −Δf + c(n)·R·f
-- `conformal_transform(sigma, n)` → `Self` — L̃ = e^((n+2)/2)σ · L · e^((n−2)/2)σ
-- `yamabe_constant_estimate(stiffness, mass)` → `Option<f64>` — smallest eigenvalue (Rayleigh quotient)
+### Weyl Tensor
 
-### Weyl Tensor (`weyl`)
+**`WeylTensor`** — the trace-free part of Riemann curvature, invariant under conformal changes.
+- `WeylTensor::zeros(n)` — zero tensor in n dimensions.
+- `WeylTensor::from_riemann(&riemann, &ricci, scalar_curvature, &metric)` — compute from Riemannian data.
+- `weyl.get(i, j, k, l)` / `weyl.set(i, j, k, l, val)`.
+- `weyl.is_zero(tol)` — vanishing implies conformal flatness (n ≥ 4).
+- `weyl.independent_components(n)` — count of free components.
+- Symmetry verifiers: `verify_antisymmetry_ij`, `verify_antisymmetry_kl`, `verify_pair_symmetry`, `verify_trace_free`.
 
-| Type | Description |
-|------|-------------|
-| `WeylTensor` | The conformally invariant curvature tensor Cᵢⱼₖₗ |
+**`CottonTensor`** — the (n−1)-form obstruction to conformal flatness in n = 3.
+- `CottonTensor::from_ricci_gradient(...)`.
+- `cotton.is_zero(tol)` — vanishing implies conformal flatness in 3D.
 
-**Methods:**
-- `zeros(n)` — zero tensor in n dimensions
-- `from_riemann(R, Ricci, R_scalar, g)` — extract Weyl from full Riemann data
-- `get(i, j, k, l)` / `set(i, j, k, l, val)` — component access
-- `is_zero(tol)` → bool — vanishes iff conformally flat (n ≥ 4)
-- `trace_free_check(tol)` → bool — verifies trace-free property
+**`is_conformally_flat_weyl(&weyl)`** / **`is_conformally_flat_cotton(&cotton)`**.
 
-Formula: Cᵢⱼₖₗ = Rᵢⱼₖₗ − (1/(n−2))(gᵢₖRⱼₗ − gᵢₗRⱼₖ + gⱼₗRᵢₖ − gⱼₖRᵢₗ) + (1/((n−1)(n−2)))(gᵢₖgⱼₗ − gᵢₗgⱼₖ)R
+### Liouville's Theorem
 
-### Conformal Weight (`conformal_weight`)
+- `is_conformal_matrix_2d(&matrix)` — Cauchy–Riemann check (a = d, b = −c).
+- `is_conformal_matrix_3d(&matrix)` — M^T M = λI check.
+- `classify_conformal_maps(dim)` → `ConformalClassification` — describes which maps are conformal in each dimension.
+- `conformal_killing_equation(&jacobian, &metric)` — check the conformal Killing equation ∇ᵢξⱼ + ∇ⱼξᵢ = (2/n)(∇·ξ)gᵢⱼ.
+- `conformal_group_dimension(n)` — dim of the conformal group = (n+1)(n+2)/2.
 
-| Type | Description |
-|------|-------------|
-| `ConformalWeight` | Enum: `Invariant` (0), `Fixed(Δ)`, `DimensionDependent(f(n))` |
-| `ConformalWeights` | Common weights: metric (2), inverse metric (−2), volume form (n), Weyl (0), etc. |
+### Conformal Laplacian
 
-**Methods:**
-- `weight(dim)` → f64 — numerical conformal weight
-- `transform(value, Ω, dim)` → f64 — apply Ω^Δ scaling
-- `transform_vector(v, Ω, dim)` → DVector — element-wise transformation
+**`ConformalLaplacian`** — L_g = −Δ + ((n−2)/(4(n−1))) R.
+- `ConformalLaplacian::new(dimension, scalar_curvature)`.
+- `lap.curvature_coefficient()` — (n−2)/(4(n−1)).
+- `lap.apply(laplacian_f, f)` — compute L_g f.
+- `lap.yamabe_constant_estimate(&stiffness, &mass)` — smallest eigenvalue (finite-element approximation).
 
-### Conformal Compactification (`compactification`)
+### Compactification
 
-| Type | Description |
-|------|-------------|
-| `StereographicProjection` | Sⁿ → Rⁿ projection from north/south pole |
-| `ConformalCompactification` | Add point at ∞ to compactify Rⁿ → Sⁿ |
+**`StereographicProjection`** — map S^n → ℝ^n.
+- `StereographicProjection::north(dimension)` / `south(dimension)`.
+- `proj.project(&point_on_sphere)` → `Option<DVector<f64>>`.
+- `proj.inverse(&point_on_rn)` → `DVector<f64>`.
 
-**StereographicProjection methods:**
-- `north(n)`, `south(n)` — projection direction
-- `project(point_on_sphere)` → `Option<DVector>` — None at pole (maps to ∞)
-- `inverse(point_in_Rn)` → DVector — lift back to sphere
+**`ConformalCompactification`** — add ∞ to make a manifold compact.
+- `compactify(&points)` — map through stereographic projection.
+- `one_point_compactify(&point, dimension)`.
+- `infinity_point(dimension)` — the representative point at ∞.
+- `round_metric_stereographic(&u)` / `round_metric_conformal_factor(&u)`.
 
-### Conformal Field Theory (`cft`)
+### CFT
 
-| Type | Description |
-|------|-------------|
-| `PrimaryField` | CFT operator: name, scaling dimension Δ, spin s, weights h = (Δ+s)/2, h̄ = (Δ−s)/2 |
-| `StressEnergyTensor` | T_μν: trace (zero for CFT), conformal anomaly, components |
+**`PrimaryField`** — a field characterized by scaling dimension Δ and spin s.
+- `PrimaryField::new(name, scaling_dimension, spin)`.
+- `field.two_point_function(distance)` — ⟨φ(x)φ(y)⟩ = 1/|x−y|^{2Δ}.
+- `field.three_point_function((f1, f2, f3), (d12, d23, d13), C_{123})`.
+- `field.satisfies_unitarity_bound(spacetime_dim)` — Δ ≥ s + (n−2)/2.
 
-**PrimaryField methods:**
-- `new(name, Δ, s)` — construct with auto-computed weights
-- `two_point_function(distance)` → f64 — 1/|x−y|^{2Δ}
-- `three_point_function(fields, distances, C₁₂₃)` → f64
-- `satisfies_unitarity_bound(spacetime_dim)` → bool — Δ ≥ |s| + n − 2
+**`StressEnergyTensor`** — the generator of conformal transformations.
+- `StressEnergyTensor::new(spacetime_dim, central_charge)`.
+- `T.two_point_coefficient(distance)` — ⟨T(x)T(y)⟩ ~ c/|x−y|^{2d}.
+- `T.is_traceless(&components, tol)` — T^μ_μ = 0 in CFT.
+- `T.ward_identity_weight(&field)` — the conformal Ward identity coefficient.
 
-### Virasoro Algebra (`virasoro`)
+**`OPE`** — operator product expansion.
+- `OPE::new("φ₁", "φ₂")`.
+- `ope.add_term(name, coefficient, scaling_dim)`.
+- `ope.coefficient_at_distance(idx, dist, Δᵢ, Δⱼ)`.
 
-| Type | Description |
-|------|-------------|
-| `VirasoroAlgebra` | [Lₘ, Lₙ] = (m−n)Lₘ₊ₙ + (c/12)(m³−m)δₘ₊ₙ,₀ with central charge c |
+### Virasoro Algebra
 
-**Methods:**
-- `new(c)` — create with central charge c
-- `witt()` — c = 0 (classical Witt algebra)
-- `commutator(m, n)` → (i64, f64) — (coefficient of Lₘ₊ₙ, central term)
-- `central_term(m)` → f64 — (c/12)(m³−m)
-- `verify_jacobi(k, m, n)` → f64 — Jacobi identity violation
-- `kac_determinant(level, h)` → f64 — Kac formula at level n with highest weight h
-- `descendant_states(level)` → `Vec<Vec<i64>>` — partitions generating descendant states
+**`VirasoroAlgebra`** — [Lₘ, Lₙ] = (m−n)L_{m+n} + (c/12)(m³−m)δ_{m+n,0}.
+- `VirasoroAlgebra::new(central_charge)`.
+- `VirasoroAlgebra::witt()` — c = 0 (no central extension).
+- `vir.commutator(m, n)` → `(lie_bracket_coefficient, central_term)`.
+- `vir.central_term(m)` — (c/12)(m³ − m).
+- `vir.verify_jacobi(k, m, n)` — check [Lₖ,[Lₘ,Lₙ]] + cyclic = 0.
+- `vir.kac_determinant(level, h)` — the Kac determinant at given level.
+- `vir.effective_central_charge(h₀)` — c_eff = c − 24h₀.
+- `vir.is_unitary(h)` — check the unitarity bounds.
 
-### Agent Learning (`agent_learning`)
+**`VermaModule`** — highest-weight representation.
+- `VermaModule::new(c, h)` — with highest weight h.
+- `verma.l0_eigenvalue(level)` — h + level.
+- `verma.level_dimension(level)` — number of states at that level.
+- `verma.is_reducible(max_level)` — if the Kac determinant vanishes.
 
-| Type | Description |
-|------|-------------|
-| `ConformalPredictionSet<T>` | Prediction set with confidence, scores, threshold |
+**`sugawara_central_charge(level_k, dim_g, dual_coxeter)`** — c from the Sugawara construction.
+**`casimir_energy(c)`** — the ground-state energy −c/24.
+**`character_q_expansion(c, h, max_order)`** — Virasoro character as power series in q.
 
-| Function | Description |
-|----------|-------------|
-| `conformal_prediction_interval(scores, α, prediction)` → (lo, hi) | Distribution-free prediction interval |
-| `conformal_rescale_belief(belief, factor)` → DVector | Scale-preserving belief transform |
-| `belief_angle(b1, b2)` → f64 | Conformal invariant angle between beliefs |
+### Agent Learning
 
-**Nonconformity scores** (`nonconformity` module):
-- `absolute_residual(prediction, observation)` — |pred − obs|
-- `normalized_residual(prediction, observation, scale)` — |pred − obs| / scale
-- `rank_score(probabilities, true_class)` — classification nonconformity
+**`conformal_prediction_interval(&calibration_scores, alpha, prediction)` → `(lower, upper)`** — distribution-free prediction interval with (1−α) coverage guarantee.
+
+**Nonconformity scores**:
+- `absolute_residual(prediction, observation)`.
+- `normalized_residual(prediction, observation, scale)`.
+- `rank_score(&probabilities, true_class)`.
+
+**`conformal_rescale_belief(&belief, factor)`** — rescale belief vector conformally.
+**`belief_angle(&b1, &b2)`** — angle between belief vectors (conformal invariant).
+**`conformal_invariant_features(&beliefs)`** — extract angle-based invariants.
+
+**`AdaptiveConformal`** — online conformal prediction that adapts to distribution shift:
+- `AdaptiveConformal::new(target_alpha, gamma)`.
+- `ac.update(covered)` — update the threshold after each observation.
 
 ---
 
 ## How It Works
 
-### Architecture
+### Möbius Transformations
 
-```
-Complex Plane
-    │
-    ├─→ MöbiusTransformation ──→ conformal automorphisms of Riemann sphere
-    ├─→ ConformalMap          ──→ local angle-preserving maps via Jacobian
-    │
-Riemannian Manifold (n-dim)
-    │
-    ├─→ ConformalLaplacian    ──→ Yamabe operator (conformally covariant)
-    ├─→ WeylTensor            ──→ conformally invariant curvature
-    ├─→ ConformalWeight        ──→ Ω^Δ transformation rules
-    ├─→ ConformalCompactification ──→ Rⁿ → Sⁿ via stereographic projection
-    │
-CFT / Virasoro
-    │
-    ├─→ PrimaryField           ──→ scaling dimension, 2-pt & 3-pt functions
-    ├─→ VirasoroAlgebra        ──→ [Lₘ,Lₙ] with central charge
-    │
-Agent Learning
-    │
-    └─→ ConformalPrediction   ──→ distribution-free uncertainty quantification
-```
+The Möbius group is the set of conformal automorphisms of the Riemann sphere ℂ ∪ {∞}. Every Möbius map can be decomposed into translations, dilations, rotations, and inversion. The **cross-ratio** of four points is invariant under all Möbius maps.
 
-### Key Algorithms
+### Conformal Flatness
 
-**Möbius composition**: (a₁,b₁,c₁,d₁) ∘ (a₂,b₂,c₂,d₂) = (a₁a₂+b₁c₂, a₁b₂+b₁d₂, c₁a₂+d₁c₂, c₁b₂+d₁d₂) — matrix multiplication.
+A manifold (M, g) is **conformally flat** if there exists a function σ such that g̃ = e^{2σ}g is flat. In n ≥ 4, this is equivalent to the Weyl tensor vanishing. In n = 3, it's equivalent to the Cotton tensor vanishing. In n = 2, every metric is conformally flat (uniformization theorem).
 
-**Conformal check (2D)**: A 2×2 matrix [[a,b],[c,d]] is conformal iff a=d and b=−c (Cauchy-Riemann).
+### Virasoro Algebra
 
-**Conformal check (3D)**: MᵀM = λI — must be a scaled orthogonal matrix.
+The conformal algebra in 2D has generators Lₙ (modes of the stress-energy tensor) satisfying [Lₘ, Lₙ] = (m−n)L_{m+n}. Quantization introduces the central charge c, giving the Virasoro algebra. The **Kac determinant** detects null states (reducibility) in Verma modules. **Unitarity** requires c ≥ 1 and h ≥ 0 (with exceptions at c < 1 in the minimal model series).
 
-**Weyl extraction**: Subtract Ricci and scalar curvature traces from Riemann tensor. Result is conformally invariant.
+### CFT Correlators
 
-**Conformal prediction**: Sort calibration nonconformity scores, take ⌈(n+1)(1−α)/n⌉-th quantile as threshold. Prediction set = {y : score(y) ≤ threshold}. Valid under exchangeability.
+In a CFT, the n-point correlation functions are fixed up to constants by conformal symmetry. The two-point function ⟨φᵢ(x)φⱼ(y)⟩ = δᵢⱼ/|x−y|^{2Δᵢ}. The three-point function ⟨φᵢφⱼφₖ⟩ = Cᵢⱼₖ/(|x₁₂|^{...}|x₂₃|^{...}|x₁₃|^{...}). The **operator product expansion** (OPE) gives the singular part of the product of two operators as they approach each other.
+
+### Conformal Prediction
+
+Given calibration scores s₁, ..., sₙ and a new prediction, the conformal prediction set is {y : s(x, y) ≤ q} where q is the ⌈(1−α)(n+1)⌉/n quantile of calibration scores. This guarantees P(Y ∈ C(X)) ≥ 1−α under exchangeability — no distributional assumptions needed.
 
 ---
 
@@ -285,57 +306,27 @@ Agent Learning
 
 ### Möbius Transformations
 
-f(z) = (az + b)/(cz + d), ad − bc ≠ 0
-
-Group isomorphic to PGL(2,ℂ) = GL(2,ℂ)/{scalars}.
-
-Classification by tr² = (a+d)²/(ad−bc):
-- **Elliptic**: tr² ∈ [0, 4) — rotation
-- **Parabolic**: tr² = 4 — translation
-- **Hyperbolic**: tr² > 4 — dilation
-- **Loxodromic**: tr² ∉ [0, 4] — general spiral
-
-### Conformal Maps
-
-f: U → V is conformal if f\*g = e²ᵖ g. In 2D, this is equivalent to f being holomorphic with f' ≠ 0 (Cauchy-Riemann).
-
-**Liouville's theorem** (n ≥ 3): The only conformal maps of Rⁿ are Möbius transformations (compositions of translations, rotations, dilations, and inversions).
-
-### Conformal Laplacian
-
-L_g = −Δ_g + ((n−2)/(4(n−1))) R_g
-
-Under g̃ = e²ᵖ g: L_g̃ = e^((n+2)/2)σ · L_g · e^((n−2)/2)σ
-
-The **Yamabe problem**: find g̃ conformal to g such that R_g̃ is constant. Solved by minimizing the Yamabe functional Q(g) = ∫ L_g u · u dV / (∫ u^{2n/(n−2)})^{(n−2)/n}.
+f(z) = (az+b)/(cz+d) with ad−bc ≠ 0. These form a group isomorphic to PGL(2, ℂ). The **trace** tr = a+d classifies: |tr| = 2 → parabolic, |tr| < 2 → elliptic, |tr| > 2 → hyperbolic, else → loxodromic.
 
 ### Weyl Tensor
 
-Cᵢⱼₖₗ = Rᵢⱼₖₗ − (1/(n−2))(gᵢₖRⱼₗ − gᵢₗRⱼₖ + gⱼₗRᵢₖ − gⱼₖRᵢₗ) + (R/((n−1)(n−2)))(gᵢₖgⱼₗ − gᵢₗgⱼₖ)
+C_{ijkl} = R_{ijkl} − (1/(n−2))(g_{ik}R_{jl} − g_{il}R_{jk} + g_{jl}R_{ik} − g_{jk}R_{il}) + R/((n−1)(n−2))(g_{ik}g_{jl} − g_{il}g_{jk}). Properties: same symmetries as Riemann, trace-free on all contractions, invariant under conformal rescaling.
 
-Properties:
-- Same symmetries as Riemann tensor
-- Trace-free: all contractions vanish
-- **Conformally invariant**: C̃ᵢⱼₖₗ = Cᵢⱼₖₗ under g̃ = Ω²g
-- C = 0 iff conformally flat (for n ≥ 4)
+### Conformal Laplacian
 
-### Virasoro Algebra
+L_g = −Δ_g + ((n−2)/(4(n−1)))R_g transforms as L_{e^{2σ}g} φ = e^{−((n+2)/2)σ} L_g (e^{((n−2)/2)σ} φ). The **Yamabe problem** asks: does there exist a conformal metric with constant scalar curvature? The answer depends on the sign of the Yamabe constant (smallest eigenvalue of L).
 
-[Lₘ, Lₙ] = (m−n)Lₘ₊ₙ + (c/12)(m³−m)δₘ₊ₙ,₀
+### Virasoro Commutator
 
-The central term c/12·(m³−m) is the **conformal anomaly**. The Kac determinant at level n:
+[Lₘ, Lₙ] = (m−n)L_{m+n} + (c/12)(m³−m)δ_{m+n,0}. The central term (c/12)(m³−m) is the **anomaly**: it vanishes classically but appears upon quantization. The central charge c measures the "number of degrees of freedom" of the CFT.
 
-det(Mₙ) = ∏_{r·s≤n} (h − hᵣₛ(c))^{p(n−rs)}
+### Kac Determinant
 
-where hᵣₛ(c) = ((cr − s)² − (c−1)²) / (4c) are the Kac zeros.
+At level N in the Verma module V(c, h), the Kac determinant is det M_N = ∏_{rs≤N} (h − h_{r,s}(c))^{p(N−rs)} where h_{r,s}(c) are the Kac zeros. When it vanishes, the module has a null state and is reducible.
 
-### Conformal Prediction
+### Conformal Prediction Coverage
 
-Given calibration scores s₁, ..., sₙ, prediction set at level 1−α:
-
-C(x) = {y : s(x,y) ≤ q⌈(n+1)(1−α)/n⌉}
-
-This is **distribution-free**: P(Y ∈ C(X)) ≥ 1−α under exchangeability, no matter the underlying distribution.
+Under exchangeability of (X₁, Y₁), ..., (Xₙ, Yₙ), (X, Y), the conformal prediction set C(X) satisfies P(Y ∈ C(X)) ≥ 1−α. The proof uses the fact that the rank of the test score among all n+1 scores is uniformly distributed.
 
 ---
 
